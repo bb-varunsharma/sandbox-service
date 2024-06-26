@@ -1,0 +1,17 @@
+{{- $root := . -}}
+  {{- $namespace := .Values.namespace }}
+  {{- $configMaps := .Values.configMaps }}
+  {{- $configFiles := .Values.configFiles }}
+  {{- $values := .Values }}
+  {{- range $index, $configMap := $configMaps }}
+  {{- $configData := dict "root" $root "namespace" $namespace "config" $configMap "values" $values }}
+
+  {{- include "sandbox.configmap" $configData }}
+---
+{{- end }}
+{{- range $index, $configFile := $configFiles }}
+{{- $configData := dict "root" $root "namespace" $namespace "config" $configFile "values" $values }}
+
+  {{- include "sandbox.configFile" $configData }}
+---
+  {{- end }}

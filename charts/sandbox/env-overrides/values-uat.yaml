@@ -1,0 +1,191 @@
+environment: uat
+namespace: hulk-uat
+# deployments is an array. Hence supports multiple deployments.
+deployments:
+  - name: sandbox-svc
+    # canary:
+    #   enabled: true
+    #   replicas: 1 # This is always recommended to be 1
+    #   labels:
+    #     kind: canary
+    podLabels:
+      app: sandbox-svc
+    # containers is an array. Hence supports multiple containers.
+    containers:
+      - name: sandbox
+        containerPortName: sandbox-port
+        containerPort: 8080
+        internalServicePort: 8080
+        servicePortName: sandbox-port
+        imagePullPolicy: IfNotPresent
+        imageName: sandbox
+        imageTag: v1.0.0
+        configMapName: sandbox-configmap
+        secretName: sandbox-secrets
+        labels:
+          type: server
+        livenessProbe:
+          httpGet:
+            path: /sandbox/internal/v1/health
+            port: 8080
+          periodSeconds: 5
+          initialDelaySeconds: 45
+          successThreshold: 1
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /sandbox/internal/v1/health
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 2
+        resources:
+          requests:
+            cpu: 50m
+            memory: 600Mi
+          limits:
+            cpu: 300m
+            memory: 1700Mi
+      - name: sandbox-nginx
+        containerPort: 9080
+        containerPortName: jh-nginx-port
+        internalServicePort: 9080
+        servicePortName: jh-nginx-port
+        externalNodePort: 27005
+        imagePullPolicy: IfNotPresent
+        imageName: nginx_pass
+        imageTag: 0.1.0
+        labels:
+          type: server
+        livenessProbe:
+          httpGet:
+            path: /sandbox/internal/v1/health
+            port: 9080
+          periodSeconds: 5
+          initialDelaySeconds: 45
+          successThreshold: 1
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /sandbox/internal/v1/health
+            port: 9080
+          initialDelaySeconds: 45
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 2
+        resources:
+          requests:
+            cpu: 10m
+            memory: 20Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
+    rollingUpdate:
+      maxSurge: "30%"
+      maxUnavailable: "50%"
+    affinity:
+      nodeAffinityLabels:
+        - name: environment
+          value: uat-hqa
+      podAntiAffinity:
+        type: required
+        labels:
+          - name: app
+            value: sandbox-svc
+    hpa:
+      native:
+        minReplicas: 1
+        maxReplicas: 1
+        targetCPUAverage: 60
+        targetMemoryAverage: 70
+        targetNamespace: hulk-qa
+        targetDeployment: sandbox-svc
+    pdb:
+      minAvailable: 80%
+configMaps:
+  - name: sandbox-configmap
+    data:
+      PORT: "8080"
+      SERVICE_NAME: "sandbox"
+      AEROSPIKE_TIMEOUT_IN_MS: "1000"
+      RDS_DB: "bbdb"
+      HULK_DB: "hulk"
+      RDS_MAX_POOL_SIZE: "5"
+      METRICS_ENABLED: "false"
+      TRACING_ENABLED: "false"
+      AEROSPIKE_NAMESPACE: "uat_bigbasket"
+      AEROSPIKE_CACHE_NAMESPACE: "uat_bbcache"
+      JAEGAR_SAMPLER_TYPE: "probabilistic"
+      JAEGAR_SAMPLER_PARAM: "0.6"
+      RUN_ENV: "uat"
+      NEWRELIC_ENABLED: "true"
+      DISTRIBUTED_TRACING_ENABLED: "false"
+      APPLICATION_LOG_FORWARD_ENABLED: "false"
+      HEAP_SIZE: "500m"
+      NEW_RELIC_APP_NAME: "UAT_SANDBOX_SVC"
+      CLASS_PATH: "com.bigbasket.core.controller.VertxLauncher"
+      FLASH_SVC_HOST: "uat-svc.bigbasket.com."
+      FLASH_SVC_PORT: "80"
+      HULK_SVC_HOST: "uat-svc.bigbasket.com."
+      HULK_SVC_PORT: "80"
+      SERVICEABILITY_SVC_HOST: "uat-svc.bigbasket.com."
+      SERVICEABILITY_SVC_PORT: "80"
+      ADMIN_SVC_HOST: "uat1.bigbasket.com."
+      ADMIN_SVC_PORT: "80"
+      MSVC_SVC_HOST: "uat-svc.bigbasket.com."
+      MSVC_SVC_PORT: "80"
+      CACHE_VERSION: "3"
+      NUMBER_OF_EVENT_LOOPS_AEROSPIKE: "2"
+      SOCIETY_IN_MEMORY_CACHE_MAX_SIZE: "10000"
+      SOCIETY_IN_MEMORY_REFRESH_INTERVAL_MINUTES: "2"
+      SOCIETY_SET: "society"
+      PREPARED_STATEMENT_SQL_LIMIT: "10000"
+      PREPARED_STATEMENT_MAX_SIZE: "10000"
+      HULK_MAX_POOL_SIZE: "5"
+      LOG_LEVEL: "DEBUG"
+      IS_ALL_USERS_LOYAL: "true"
+      PLACES_SVC_HOST: "uat-svc.bigbasket.com."
+      HEALTH_CHECK_CACHE_EXPIRY: 6000
+      MACH_DISABLED_SKIP_EC_LIST: "[7]"
+      SANDBOX_HEALTH_CHECK: "sandbox"
+      SERVICE_SLUG: "sandbox"
+      CONFIG_KEYS: "db,cache"
+      HOST: "uat-svc.bigbasket.com."
+      # Secret Manager Configs
+      REGION: "us-east-1"
+      ENV: "uat"
+      AWS_MAX_ATTEMPTS: 13
+      ACMS_SECRET: "hqa_uat-acms-jhulk-uat-bigbasket-v1"
+      AEROSPIKE_SOCKET_TIMEOUT_MS: "1000"
+      AEROSPIKE_CONNECT_TIMEOUT_MS: "3000"
+      AEROSPIKE_TOTAL_TIMEOUT_MS: "4000"
+      MAX_COMMANDS_IN_QUEUE: "20000"
+      MAX_CONN_PER_NODE: "600"
+      MIN_CONN_PER_NODE: "1"
+      MAX_COMMANDS_IN_PROCESS: "600"
+      SNOWFLAKE_ID_GENERATION_ENABLED: "true"
+
+requiredInfraDependencies:
+  name: sandbox-infra
+  values:
+    AEROSPIKE_HOSTS: $AEROSPIKE_HOSTS
+    AEROSPIKE_PORT: $AEROSPIKE_PORT
+    RDS_MASTER_HOST: $MONOLITH_MASTER_DATABASE_HOST
+    RDS_MASTER_USER: $MONOLITH_MASTER_DATABASE_USER
+    RDS_MASTER_PORT: $MONOLITH_MASTER_DATABASE_PORT
+    RDS_MASTER_PWD: $MONOLITH_MASTER_DATABASE_PASSWORD
+    HULK_MASTER_HOST: $HULK_DATABASE_HOST
+    HULK_MASTER_USER: $HULK_DATABASE_USER
+    HULK_MASTER_PORT: $HULK_DATABASE_PORT
+    HULK_MASTER_PWD: $HULK_DATABASE_PASSWORD
+    JAEGAR_AGENT_PORT: $JAEGAR_PORT
+    JAEGAR_AGENT_HOST: $JAEGAR_HOST
+    # NOTE: nodeLabels renders the nodeSelector block.
+# nodeAffinityLabels, although can be used as an alternative to `nodeSelector`, is much more powerful than `nodeSelector`.
+nodeLabels:
+  environment: uat-hqa
+
+tolerationVariables:
+  tolerationKey: "access"
+  tolerationValue: "pod"

@@ -1,0 +1,46 @@
+
+{{- $root := . }}
+  {{- $values := $root.Values }}
+  {{- $deploymentsData := $values.deployments }}
+  {{ if $deploymentsData }}
+  {{- range $deploymentsData }}
+  {{ $currentDeployment := . }}
+    {{- if $currentDeployment.hpa.keda -}}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ $values.namespace }}-{{ $currentDeployment.hpa.keda.targetDeployment }}-scaledobject
+  namespace: {{ $values.namespace }}
+  {{- if $currentDeployment.hpa.keda.pausedReplicas }}
+  annotations:
+    autoscaling.keda.sh/paused-replicas: {{ $currentDeployment.hpa.keda.pausedReplicas | quote }}
+  {{- end }}
+
+spec:
+  scaleTargetRef:
+    apiVersion: "apps/v1"
+    kind: "Deployment"
+    name: {{ $currentDeployment.hpa.keda.targetDeployment }}
+  pollingInterval: {{ default 10 $currentDeployment.hpa.keda.pollingInterval }}
+  cooldownPeriod: {{ default 300 $currentDeployment.hpa.keda.cooldownPeriod }}
+  idleReplicaCount: {{ default 0 $currentDeployment.hpa.keda.idleReplicaCount }}
+  minReplicaCount: {{ default 1 $currentDeployment.hpa.keda.minReplicaCount }}
+  maxReplicaCount: {{ default 100 $currentDeployment.hpa.keda.maxReplicaCount }}
+  fallback:
+    failureThreshold: {{ $currentDeployment.hpa.keda.fallbackFailureThreshold }}
+    replicas: {{ $currentDeployment.hpa.keda.fallbackReplicas }}
+  advanced:
+    restoreToOriginalReplicaCount: {{ default false $currentDeployment.hpa.keda.restoreToOriginalReplicaCount }}
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: {{ default 300 $currentDeployment.hpa.keda.behaviour.scaleDownStabilizationWindowSeconds }}
+          policies:
+            - type: {{ default "Percent" (index $currentDeployment.hpa.keda.behaviour.scaleDownPolicies 0).type }}
+              value: {{ default 10 (index $currentDeployment.hpa.keda.behaviour.scaleDownPolicies 0).value }}
+              periodSeconds: {{ default 15 (index $currentDeployment.hpa.keda.behaviour.scaleDownPolicies 0).periodSeconds }}
+  triggers:
+  {{ toYaml $currentDeployment.hpa.keda.triggers | nindent 4 }}
+    {{- end }}
+    {{- end }}
+  {{- end }}

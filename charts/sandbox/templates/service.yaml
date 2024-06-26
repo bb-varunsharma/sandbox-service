@@ -1,0 +1,51 @@
+{{- $servicePorts := list "0000" }}
+  {{- $root := . }}
+  {{- $values := $root.Values }}
+  {{- $deploymentsData := $values.deployments }}
+  {{- if $deploymentsData }}
+  {{- range $deploymentsData }}
+  {{ $currentDeployment := . }}
+  {{- range $currentDeployment.containers }}
+  {{- if .internalServicePort }}
+  {{- $servicePorts = append $servicePorts .internalServicePort }}
+  {{- end }}
+  {{- end }}
+  {{- if gt (len $servicePorts) 1 }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $currentDeployment.name }}{{ include "app.uniqueSuffix" $values }}
+  namespace: {{ $values.namespace }}
+  labels:
+    serviceName: sandbox
+spec:
+  {{- range $currentDeployment.containers }}
+  {{ if .externalNodePort -}}
+  type: NodePort
+  {{ else }}
+  type: ClusterIP
+  {{- end }}
+  ports:
+    {{- if .internalServicePort }}
+    - port: {{ .internalServicePort }}
+      protocol: TCP
+      targetPort: {{ .containerPort }}
+      {{ if .externalNodePort -}}
+      nodePort: {{ .externalNodePort }}
+      {{ else }}
+      nodePort: null
+      {{- end }}
+      {{ if .servicePortName -}}
+      name: {{ .servicePortName}}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  selector:
+    app: {{ $currentDeployment.name }}
+    {{ if (or (eq $values.environment "qa") (eq $values.environment "hqa")) }}
+    project: {{ $values.project }}
+    {{ end }}
+  {{ end }}
+---
+{{ end }}
+  {{ end }}

@@ -1,0 +1,1 @@
+Delete namespace.yaml before deploying to kops/kadm as its already present and managed by DEVOPS.

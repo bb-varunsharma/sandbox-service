@@ -1,0 +1,21 @@
+project: "mv-canary"
+tenant: "BB"
+deployments:
+  - name: sandbox-svc
+    podLabels:
+      app: sandbox-svc
+      project: mv-canary
+      version: v2
+    containers:
+      - name: sandbox
+        imageName: sandbox
+        imageTag: v1.0.0
+      - name: sandbox-nginx
+        imageName: nginx_pass
+        imageTag: 0.1.0
+        externalNodePort: 21007
+
+configMaps:
+  - name: sandbox-configmap
+    data:
+      X_PROJECT: "mv-canary"

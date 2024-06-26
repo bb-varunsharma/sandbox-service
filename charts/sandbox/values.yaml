@@ -1,0 +1,141 @@
+project: ""
+tenant: bb
+environment: dev
+namespace: sandbox-dev
+# deployments is an array. Hence supports multiple deployments.
+deployments:
+  - name: sandbox-svc
+    # canary:
+    #   enabled: true
+    #   replicas: 1 # This is always recommended to be 1
+    #   labels:
+    #     kind: canary
+    podLabels:
+      app: sandbox-svc
+    # containers is an array. Hence supports multiple containers.
+    containers:
+      - name: sandbox
+        containerPortName: sandbox-port
+        containerPort: 8080
+        internalServicePort: 8080
+        servicePortName: sandbox-port
+        imageName: sandbox
+        imageTag: v1.0.0
+        configMapName: sandbox-configmap
+        secretName: sandbox-secrets
+        livenessProbe:
+          httpGet:
+            path: /sandbox/internal/v1/health
+            port: 8080
+          periodSeconds: 5
+          initialDelaySeconds: 45
+          successThreshold: 1
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /sandbox/internal/v1/health
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 2
+        resources:
+          requests:
+            cpu: 200m
+            memory: 600Mi
+          limits:
+            cpu: 200m
+            memory: 1700Mi
+      - name: sandbox-nginx
+        containerPort: 9080
+        containerPortName: jh-nginx-port
+        internalServicePort: 9080
+        servicePortName: jh-nginx-port
+        externalNodePort: 18005
+        imagePullPolicy: IfNotPresent
+
+        imageName: nginx_pass
+        imageTag: 0.1.0
+        livenessProbe:
+          httpGet:
+            path: /sandbox/internal/v1/health
+            port: 9080
+          periodSeconds: 5
+          initialDelaySeconds: 45
+          successThreshold: 1
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /sandbox/internal/v1/health
+            port: 9080
+          initialDelaySeconds: 45
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 2
+        resources:
+          requests:
+            cpu: 100m
+            memory: 160Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
+    rollingUpdate:
+      maxSurge: "30%"
+      maxUnavailable: "20%"
+    affinity:
+      nodeAffinityLabels:
+        - name: environment
+          value: dev-qa
+      podAntiAffinity:
+        type: required
+        labels:
+          - name: app
+            value: sandbox-svc
+configMaps:
+  - name: sandbox-configmap
+    data:
+      PORT: "8080"
+      SERVICE_NAME: "sandbox"
+      AEROSPIKE_TIMEOUT_IN_MS: "1000"
+      RDS_DB: "bbdb"
+      HULK_DB: "hulk"
+      RDS_MAX_POOL_SIZE: "5"
+      METRICS_ENABLED: "false"
+      TRACING_ENABLED: "false"
+      AEROSPIKE_NAMESPACE: "dev_bigbasket"
+      AEROSPIKE_CACHE_NAMESPACE: "dev_bbcache"
+      JAEGAR_SAMPLER_TYPE: "probabilistic"
+      JAEGAR_SAMPLER_PARAM: "0.6"
+      RUN_ENV: "dev"
+      NEWRELIC_ENABLED: "false"
+      HEAP_SIZE: "500m"
+      NEW_RELIC_APP_NAME: "DEV_SANDBOX_SVC"
+      CLASS_PATH: "com.bigbasket.core.controller.VertxLauncher"
+      FLASH_SVC_HOST: "flash-svc.flash-dev.svc.cluster.local"
+      HULK_SVC_HOST: "hulk-svc.hulk-dev.svc.cluster.local"
+      HULK_SVC_PORT: "6666"
+      FLASH_SVC_PORT: "6666"
+      CACHE_VERSION: "3"
+      PREPARED_STATEMENT_SQL_LIMIT: "10000"
+      PREPARED_STATEMENT_MAX_SIZE: "10000"
+      HULK_MAX_POOL_SIZE: "10"
+      SNOWFLAKE_ID_GENERATION_ENABLED: "false"
+requiredInfraDependencies:
+  name: sandbox-infra
+  values:
+    AEROSPIKE_HOSTS: $AEROSPIKE_HOSTS
+    AEROSPIKE_PORT: $AEROSPIKE_PORT
+    RDS_MASTER_HOST: $MONOLITH_MASTER_DATABASE_HOST
+    RDS_MASTER_USER: $MONOLITH_MASTER_DATABASE_USER
+    RDS_MASTER_PORT: $MONOLITH_MASTER_DATABASE_PORT
+    RDS_MASTER_PWD: $MONOLITH_MASTER_DATABASE_PASSWORD
+    HULK_MASTER_HOST: $HULK_DATABASE_HOST
+    HULK_MASTER_USER: $HULK_DATABASE_USER
+    HULK_MASTER_PORT: $HULK_DATABASE_PORT
+    HULK_MASTER_PWD: $HULK_DATABASE_PASSWORD
+    JAEGAR_AGENT_PORT: $JAEGAR_PORT
+    JAEGAR_AGENT_HOST: $JAEGAR_HOST
+    # NOTE: nodeLabels renders the nodeSelector block.
+# nodeAffinityLabels, although can be used as an alternative to `nodeSelector`, is much more powerful than `nodeSelector`.
+nodeLabels:
+  environment: dev-qa

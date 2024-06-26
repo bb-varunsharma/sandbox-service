@@ -1,0 +1,163 @@
+{{/*
+   This template renders both normal and canary deployments.
+  */}}
+  {{- $root := . }}
+  {{- $values := $root.Values }}
+  {{- $environment := $values.environment}}
+  {{ $registry := $root.Values.registry }}
+  {{- $deploymentsData := $values.deployments }}
+  {{ if $deploymentsData }}
+  {{- range $deploymentsData }}
+  {{ $currentDeployment := . }}
+  {{ $normalDeployment := dict "replicas" $currentDeployment.replicas "isCanary" false }}
+  {{ $deployments := list $normalDeployment }}
+  {{ if $currentDeployment.canary }}
+  {{ if eq $currentDeployment.canary.enabled true }}
+  {{ $canaryDeployment := dict "replicas" $currentDeployment.replicas "isCanary" true }}
+  {{ $deployments = append $deployments $canaryDeployment }}
+  {{ end -}}
+  {{ end -}}
+  {{ range $deployments }}
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ $currentDeployment.name }}{{- if .isCanary }}-canary{{- end }}{{ include "app.uniqueSuffix" $values }}
+  namespace: {{ $values.namespace }}
+spec:
+  {{- if .replicas}}
+  replicas: {{ .replicas }}
+  {{- end }}
+  strategy:
+    rollingUpdate:
+      {{- toYaml $currentDeployment.rollingUpdate | nindent 6 }}
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- if $currentDeployment.podLabels }}
+        {{- toYaml $currentDeployment.podLabels | nindent 6 }}
+        {{- end }}
+        {{- if and .isCanary }}
+        {{- toYaml $currentDeployment.canary.labels | nindent 6 }}
+        {{- end }}
+  template:
+    metadata:
+      {{- if or $currentDeployment.podLabels .isCanary}}
+      labels:
+        {{- if $currentDeployment.podLabels }}
+        {{- toYaml $currentDeployment.podLabels | nindent 8 }}
+        env: {{ $environment }}
+        {{- end -}}
+        {{- if .isCanary }}
+        {{- if $currentDeployment.canary.labels }}
+        {{- toYaml $currentDeployment.canary.labels | nindent 8 }}
+        env: {{ $environment }}
+        {{- end -}}
+        {{- end }}
+      {{- end }}
+      annotations:
+        {{- include "sandbox.infraAnnotations" $root | nindent 8 }}
+        {{- include "sandbox.podAnnotations" $currentDeployment | nindent 8}}
+    spec:
+      {{- if $currentDeployment.affinity }}
+        {{- include "sandbox.affinity" $currentDeployment.affinity | trim | nindent 6 }}
+        {{- end }}
+      nodeSelector:
+        {{- include "sandbox.nodeLabels" $values.nodeLabels | trim | nindent 8 }}
+      {{- if $currentDeployment.tolerations }}
+      tolerations:
+        {{- toYaml $currentDeployment.tolerations | nindent 8 }}
+      {{- end }}
+      {{- if $currentDeployment.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ $currentDeployment.imagePullSecret }}{{ include "app.uniqueSuffix" $values }}
+      {{- end }}
+      containers:
+        {{- range $currentDeployment.containers }}
+        - livenessProbe:
+            httpGet:
+              path: /sandbox/internal/v1/health
+              port: {{ .containerPort }}
+            periodSeconds: 5
+            initialDelaySeconds: 90
+            successThreshold: 1
+            timeoutSeconds: 10
+          readinessProbe:
+              httpGet:
+                path: /sandbox/internal/v1/health
+                port: {{ .containerPort }}
+              initialDelaySeconds: 90
+              periodSeconds: 5
+              successThreshold: 1
+              failureThreshold: 2
+          name: {{ .name }}{{ include "app.uniqueSuffix" $values }}
+          env:
+            {{- if .env }}
+              {{- toYaml .env | nindent 12 }}
+              {{- end }}
+            - name: K8S_IMAGE_VERSION
+              value: {{ .imageTag }}
+            - name: K8S_HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          envFrom:
+            {{- if hasKey . "configMapName" }}
+            - configMapRef:
+                name: {{ .configMapName }}{{ include "app.uniqueSuffix" $values }}
+            {{- end }}
+            {{- if hasKey . "secretName" }}
+            - secretRef:
+                name: {{ .secretName }}{{ include "app.uniqueSuffix" $values }}
+            {{- end }}
+            - secretRef:
+                name: {{ $values.requiredInfraDependencies.name }}{{ include "app.uniqueSuffix" $values }}
+          imagePullPolicy: {{ default "IfNotPresent" .imagePullPolicy }}
+          image: {{ $registry }}{{ .imageName }}:{{- .imageTag }}
+          ports:
+              - protocol: TCP
+                name: {{ .containerPortName }}
+                containerPort: {{ .containerPort }}
+          resources:
+          {{- toYaml .resources | nindent 12 }}
+          {{- if or ($values.configFiles) ($values.secretsFiles) }}
+          volumeMounts:
+            {{- if hasKey $values "configFiles" }}
+              {{- $requiredConfigFileInfo := dict "configFiles" $values.configFiles "configFileName" .configFileName "values" $values }}
+              {{- include "sandbox.containerVolumeMounts" $requiredConfigFileInfo | trim | nindent 12 }}
+              {{- end }}
+              {{- if hasKey $values "secretsFiles" }}
+              {{- $requiredSecretsFileInfo := dict "secretsFiles" $values.secretsFiles "secretsFileName" .secretsFileName "values" $values }}
+              {{- include "sandbox.containerVolumeMounts" $requiredSecretsFileInfo | trim | nindent 12 }}
+              {{- end }}
+          {{- end }}
+        {{- end }}
+        {{- if  (or (eq $values.environment "prod")  (eq $values.environment "staging")) }}
+        {{- include "sandbox.imagePullSecrets" $values.imagePullSecrets | trim | nindent 6 }}
+        {{- end }}
+        {{ $podConfigMapVolumesData := dict "configFiles" $values.configFiles "type" "configFiles" "values" $values}}
+        {{ $podSecretVolumesData := dict "secretsFiles" $values.secretsFiles "type" "secretsFiles" "values" $values}}
+        {{- if or ($podConfigMapVolumesData.configFiles) ($podSecretVolumesData.secretsFiles) -}}
+        volumes:
+          {{- if $podConfigMapVolumesData.configFiles }}
+            {{- include "sandbox.podVolumes" $podConfigMapVolumesData | trim | nindent 8 }}
+            {{- end }}
+            {{- if $podSecretVolumesData.secretsFiles }}
+            {{- include "sandbox.podVolumes" $podSecretVolumesData | trim | nindent 8 }}
+            {{- end }}
+        {{- end }}
+---
+{{ end }}
+  {{ end }}
+  {{ end }}
