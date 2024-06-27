@@ -11,7 +11,7 @@ version '0.0.1-SNAPSHOT'
 sourceCompatibility = JavaVersion.VERSION_11
 mainClassName = 'com.bigbasket.core.controller.VertxLauncher'
 def vertxVersion = '4.4.1'
-def mainVerticleName = 'com.bigbasket.sandbox.MainVerticle'
+def mainVerticleName = 'com.bigbasket.sandbox.controller.MainVerticle'
 //def watchForChange = 'src/**/*'
 //def doOnChange = 'gradle build'
 

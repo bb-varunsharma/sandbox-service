@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import com.bigbasket.core.common.RequestContext;
 import com.bigbasket.core.common.di.VerticleScope;
 import com.bigbasket.core.controller.BBCommonVerticle;
+import com.bigbasket.sandbox.api.handler.HealthCheckHandler;
 import com.bigbasket.sandbox.model.SandboxError;
 
 import io.vertx.core.json.Json;
@@ -48,6 +49,9 @@ public class SandboxAPI {
     protected JsonObject config;
 
     @Inject
+    protected HealthCheckHandler healthCheckHandler;
+
+    @Inject
     public SandboxAPI() {
     }
 
@@ -68,6 +72,8 @@ public class SandboxAPI {
             checkHeaders(routingContext);
             routingContext.next();
         });
+
+        this.router.get(HEALTH_CHECK).handler(healthCheckHandler.handle());
 
     }
 
