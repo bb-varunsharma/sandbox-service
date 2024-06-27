@@ -1,4 +1,4 @@
-FROM gradle:6.1.1-jdk11  as build
+FROM gradle:7.4-jdk11  as build
 RUN mkdir -p /home/gradle/cache_home
 ARG GITHUB_USERNAME
 ARG GITHUB_TOKEN
@@ -8,7 +8,7 @@ COPY build.gradle /home/gradle/sandbox/
 WORKDIR /home/gradle/sandbox
 RUN gradle clean build -i --stacktrace
 
-FROM gradle:6.1.1-jdk11  as builder
+FROM gradle:7.4-jdk11  as builder
 COPY --from=build /home/gradle/cache_home /home/gradle/.gradle
 WORKDIR /home/gradle/sandbox
 COPY . .
