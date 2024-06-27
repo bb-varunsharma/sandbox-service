@@ -27,4 +27,4 @@ RUN mkdir conf && touch conf/secret.properties
 COPY conf $SANDBOX_HOME/conf/
 ENTRYPOINT ["/bin/bash", "-c"]
 EXPOSE 8080
-CMD [ "java -Xms${HEAP_SIZE} -Xmx${HEAP_SIZE} -XX:+UseG1GC  -javaagent:${HULK_HOME}/newrelic/newrelic.jar -Dnewrelic.config.agent_enabled=${NEWRELIC_ENABLED}  -Dnewrelic.environment=${RUN_ENV} -cp  hulk-0.0.1-SNAPSHOT-all.jar ${CLASS_PATH}"]
+CMD [ "java -Xms${HEAP_SIZE} -Xmx${HEAP_SIZE} -XX:+UseG1GC  -javaagent:${HULK_HOME}/newrelic/newrelic.jar -Dnewrelic.config.agent_enabled=${NEWRELIC_ENABLED}  -Dnewrelic.environment=${RUN_ENV} -cp  sandbox-0.0.1-SNAPSHOT-all.jar ${CLASS_PATH}"]
