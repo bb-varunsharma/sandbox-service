@@ -1,26 +1,24 @@
 package com.bigbasket.sandbox.api;
 
-import java.util.HashMap;
-import java.util.Set;
-
-import javax.inject.Inject;
-
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.bigbasket.core.common.RequestContext;
 import com.bigbasket.core.common.di.VerticleScope;
 import com.bigbasket.core.controller.BBCommonVerticle;
+import com.bigbasket.sandbox.api.handler.AerospikeClientHandler;
 import com.bigbasket.sandbox.api.handler.HealthCheckHandler;
 import com.bigbasket.sandbox.model.SandboxError;
-
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import io.vertx.reactivex.core.http.HttpServerRequest;
 import io.vertx.reactivex.core.http.HttpServerResponse;
 import io.vertx.reactivex.ext.web.Router;
 import io.vertx.reactivex.ext.web.RoutingContext;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.inject.Inject;
+import java.util.HashMap;
+import java.util.Set;
 
 @VerticleScope
 public class SandboxAPI {
@@ -41,6 +39,7 @@ public class SandboxAPI {
     public static final String HEALTH_CHECK = INTERNAL_V1_PREFIX + "/health";
 
     public static final String CREATE_AEROSPIKE_DATA = INTERNAL_V1_PREFIX + "/test/aerospike";
+    public static final String READ_AEROSPIKE_DATA = INTERNAL_V1_PREFIX + "/test/aerospike";
 
     @Inject
     protected Router router;
@@ -50,6 +49,9 @@ public class SandboxAPI {
 
     @Inject
     protected HealthCheckHandler healthCheckHandler;
+
+    @Inject
+    protected AerospikeClientHandler aerospikeClientHandler;
 
     @Inject
     public SandboxAPI() {
@@ -74,6 +76,8 @@ public class SandboxAPI {
         });
 
         this.router.get(HEALTH_CHECK).handler(healthCheckHandler.handle());
+        this.router.put(CREATE_AEROSPIKE_DATA).handler(aerospikeClientHandler.handleUpdates());
+        this.router.get(READ_AEROSPIKE_DATA).handler(aerospikeClientHandler.handleReads());
 
     }
 
