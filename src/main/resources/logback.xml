@@ -14,7 +14,7 @@
     </logger>
 
     <logger name="com.bigbasket">
-        <level value="info" />
+        <level value="debug" />
     </logger>
 
     <logger name="io.grpc.netty">

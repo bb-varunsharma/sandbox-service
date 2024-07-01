@@ -1,52 +1,85 @@
 package com.bigbasket.sandbox.api.handler;
 
-import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.Bin;
-import com.aerospike.client.Key;
-import com.aerospike.client.Record;
-import com.aerospike.client.policy.WritePolicy;
+import javax.inject.Inject;
+
+import com.bigbasket.core.dal.aerospike.ARecord;
 import com.bigbasket.core.dal.aerospike.Aerospike;
+import com.bigbasket.sandbox.model.SandboxError;
+
+import io.reactivex.Single;
 import io.vertx.core.Handler;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import io.vertx.reactivex.core.http.HttpServerResponse;
 import io.vertx.reactivex.ext.web.RoutingContext;
-
-import javax.inject.Inject;
 
 public class AerospikeClientHandler {
 
     @Inject
     public AerospikeClientHandler() {
-        this.aerospikeClient = new AerospikeClient("localhost", 3000);
     }
+
     @Inject
     Aerospike aerospikeService;
-    private final AerospikeClient aerospikeClient;
-    public Handler<RoutingContext> handleUpdates(){
+
+    public Handler<RoutingContext> handleUpdates() {
         return routingContext -> {
             HttpServerResponse httpServerResponse = routingContext.response();
-            String key = routingContext.getBodyAsJson().getString("key");
-            String value = routingContext.getBodyAsJson().getString("value");
-            Key aerospikeKey = new Key("test", "testSet", key);
-            Bin bin = new Bin("bins", value);
-            WritePolicy writePolicy = new WritePolicy();
-            aerospikeClient.put(writePolicy, aerospikeKey, bin);
-            httpServerResponse.setStatusCode(200).end(new JsonObject().put("key", key).put("value", value).encode());
+            JsonObject bodyJson = routingContext.getBodyAsJson();
+            String key = "";
+            String value = "";
+            if (bodyJson != null) {
+                key = bodyJson.getString("key");
+                value = bodyJson.getString("value");
+            } else {
+                httpServerResponse.setStatusCode(400)
+                        .end(Json.encodePrettily(SandboxError.badRequest("body json not found").toJson()));
+                return;
+            }
+
+            String namespace = "bigbasket";
+
+            String set = "new_set";
+            int expirationInSecs = 0; // 1-hour
+
+            Single<Boolean> result = aerospikeService.put(namespace, set, key, value, expirationInSecs);
+
+            result.subscribe(res -> {
+                if (res) {
+                    httpServerResponse.setStatusCode(200).end(bodyJson.put("status", "success").encode());
+                } else {
+                    httpServerResponse.setStatusCode(500)
+                            .end(Json.encodePrettily(SandboxError.unknownException("Error while fetching data from cache").toJson()));
+                }
+            });
         };
     }
+
     public Handler<RoutingContext> handleReads() {
         return routingContext -> {
             HttpServerResponse httpServerResponse = routingContext.response();
             String key = routingContext.queryParams().get("key");
-            Key aerospikeKey = new Key("test", "testSet", key);
+            String namespace = "bigbasket";
+            String set = "new_set";
+            String binName = "value";
+
             // Read the value from Aerospike
-            Record record = null;
-            record = aerospikeClient.get(null, aerospikeKey);
-            if (record != null) {
-                // Value exists in Aerospike
-                String value = record.getString("bins");
-                httpServerResponse.setStatusCode(200).end(new JsonObject().put("key", key).put("value", value).encode());
-            }
+            Single<ARecord> record = aerospikeService.get(namespace, set, key);
+            JsonObject responseJson = new JsonObject().put("key", key);
+            record.subscribe(res -> {
+                if (res.bins != null && res.bins.get(binName) != null) {
+                    String value = (String) res.bins.get(binName);
+                    responseJson.put("value", value)
+                            .put("status", "success");
+                    httpServerResponse.setStatusCode(200).end(responseJson.encodePrettily());
+                } else {
+                    httpServerResponse.setStatusCode(404)
+                            .end(Json.encodePrettily(SandboxError.notFoundError("data not in cache").toJson()));
+                }
+            }, err -> {
+                httpServerResponse.setStatusCode(500)
+                        .end(Json.encodePrettily(SandboxError.unknownException("Error while fetching data from cache").toJson()));
+            });
         };
     }
 }

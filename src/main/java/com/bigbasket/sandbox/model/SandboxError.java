@@ -5,6 +5,8 @@ import java.util.Set;
 import com.bigbasket.core.common.JsonSerializable;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -52,17 +54,41 @@ public class SandboxError extends Exception implements JsonSerializable {
     public static SandboxError missingHeaders(Set<String> requiredHeaders) {
         return new SandboxError(SandboxError.BAD_REQUEST,
                 "MISSING_HEADERS",
-                "You are Missing any Required Headers " + requiredHeaders,
-                "You are Missing any Required Header",
+                "You are missing one of the Required Headers " + requiredHeaders,
+                "You are missing one of the Required Headers " + requiredHeaders,
                 SandboxError.BAD_REQUEST);
+    }
+
+    public static SandboxError badRequest(String message) {
+        return new SandboxError(SandboxError.BAD_REQUEST,
+                "Bad Request",
+                "Bad Request: " + message,
+                "Bad Request: " + message,
+                SandboxError.BAD_REQUEST);
+    }
+
+    public static SandboxError notFoundError(String message) {
+        return new SandboxError(SandboxError.BAD_REQUEST,
+                "Not found",
+                "Not found: " + message,
+                "Not found: " + message,
+                SandboxError.NOT_FOUND);
     }
 
     public static SandboxError unknownException(String error) {
         return new SandboxError(SandboxError.INTERNAL_SERVER_ERROR,
-                "INTERNAL_SERVER_ERROR",
-                "INTERNAL_SERVER_ERROR " + error,
-                "INTERNAL SERVER ERROR",
+                "Internal Server Error",
+                "Internal Server Error " + error,
+                "Internal Server Error " + error,
                 SandboxError.INTERNAL_SERVER_ERROR);
     }
 
+    public JsonObject toJson() {
+        JsonObject json = JsonObject.mapFrom(this);
+        json.remove("cause");
+        json.remove("suppressed");
+        json.remove("localizedMessage");
+        json.remove("stackTrace");
+        return new JsonObject().put("errors", new JsonArray().add(json));
+    }
 }

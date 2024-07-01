@@ -38,8 +38,7 @@ public class SandboxAPI {
 
     public static final String HEALTH_CHECK = INTERNAL_V1_PREFIX + "/health";
 
-    public static final String CREATE_AEROSPIKE_DATA = INTERNAL_V1_PREFIX + "/test/aerospike";
-    public static final String READ_AEROSPIKE_DATA = INTERNAL_V1_PREFIX + "/test/aerospike";
+    public static final String TEST_AEROSPIKE = INTERNAL_V1_PREFIX + "/test/aerospike";
 
     @Inject
     protected Router router;
@@ -72,13 +71,11 @@ public class SandboxAPI {
 
         this.router.route("/*").handler(routingContext -> {
             checkHeaders(routingContext);
-            routingContext.next();
         });
 
         this.router.get(HEALTH_CHECK).handler(healthCheckHandler.handle());
-        this.router.put(CREATE_AEROSPIKE_DATA).handler(aerospikeClientHandler.handleUpdates());
-        this.router.get(READ_AEROSPIKE_DATA).handler(aerospikeClientHandler.handleReads());
-
+        this.router.get(TEST_AEROSPIKE).handler(aerospikeClientHandler.handleReads());
+        this.router.put(TEST_AEROSPIKE).handler(aerospikeClientHandler.handleUpdates());
     }
 
     private void checkHeaders(RoutingContext routingContext) {
