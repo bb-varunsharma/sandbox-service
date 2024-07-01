@@ -1,0 +1,125 @@
+plugins {
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '5.1.0'
+    id 'java'
+    id 'jacoco'
+}
+
+group 'com.bigbasket'
+version '0.0.1-SNAPSHOT'
+
+sourceCompatibility = JavaVersion.VERSION_11
+mainClassName = 'com.bigbasket.core.controller.VertxLauncher'
+def vertxVersion = '4.4.1'
+def mainVerticleName = 'com.bigbasket.sandbox.controller.MainVerticle'
+//def watchForChange = 'src/**/*'
+//def doOnChange = 'gradle build'
+
+repositories {
+    mavenLocal()
+    jcenter()
+    maven { url "https://plugins.gradle.org/m2/" }
+    maven {
+        name = "GitHubPackages"
+        url = uri("https://maven.pkg.github.com/BigBasket/bb2")
+        credentials {
+            username = System.getenv("GITHUB_USERNAME")
+            password = System.getenv("GITHUB_TOKEN")
+        }
+    }
+    mavenCentral()
+}
+
+dependencies {
+    implementation "com.bigbasket:vertx-core:v1.0.14"
+    implementation 'software.amazon.awssdk:secretsmanager:2.15.80'
+    implementation "io.vertx:vertx-core:$vertxVersion"
+    implementation "io.vertx:vertx-web:$vertxVersion"
+    implementation "io.vertx:vertx-config:$vertxVersion"
+    implementation "io.vertx:vertx-rx-java2:$vertxVersion"
+    implementation "io.vertx:vertx-web-client:$vertxVersion"
+    implementation "io.vertx:vertx-kafka-client:$vertxVersion"
+    implementation "io.vertx:vertx-mysql-client:$vertxVersion"
+    implementation "io.vertx:vertx-service-proxy:$vertxVersion"
+    implementation "io.vertx:vertx-codegen:$vertxVersion"
+    implementation "com.github.mauricio:mysql-async_2.11:0.2.21"
+    implementation 'io.vertx:vertx-sql-common:3.9.15'
+    implementation "io.vertx:vertx-codegen:$vertxVersion"
+    implementation "ch.qos.logback:logback-classic:1.2.9"
+    implementation 'com.aerospike:aerospike-client:4.3.1'
+    implementation 'io.jaegertracing:jaeger-client:0.31.0'
+    implementation 'com.newrelic.agent.java:newrelic-api:8.1.0'
+    implementation 'io.zipkin.reporter2:zipkin-sender-okhttp3:2.7.8'
+    implementation 'io.opentracing.brave:brave-opentracing:0.33.0'
+    implementation "net.logstash.logback:logstash-logback-encoder:5.2"
+    implementation 'com.google.maps:google-maps-services:2.1.0'
+    implementation 'org.slf4j:slf4j-simple:1.7.36'
+    implementation 'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.1.1'
+    implementation 'org.elasticsearch.client:elasticsearch-rest-client:6.6.1'
+    implementation 'org.apache.logging.log4j:log4j-to-slf4j:2.17.2'
+    implementation 'org.projectlombok:lombok:1.18.26'
+    annotationProcessor 'org.projectlombok:lombok:1.18.26'
+
+    // use dagger for di
+    implementation 'com.google.dagger:dagger:2.25.4'
+    annotationProcessor 'com.google.dagger:dagger-compiler:2.25.4'
+    testAnnotationProcessor 'com.google.dagger:dagger-compiler:2.25.4'
+
+    testImplementation "io.vertx:vertx-junit5:$vertxVersion"
+    testImplementation 'org.mockito:mockito-inline:4.11.0'
+    testImplementation "org.junit.jupiter:junit-jupiter-params:5.2.0"
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.2.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.2.0'
+    testImplementation 'org.assertj:assertj-core:3.8.0'
+    testImplementation 'org.apache.commons:commons-lang3:3.12.0'
+    testImplementation 'org.projectlombok:lombok:1.18.26'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.26'
+}
+
+shadowJar {
+    classifier = 'fat'
+    manifest {
+        attributes "Main-Verticle": mainVerticleName
+    }
+    mergeServiceFiles {
+        include 'META-INF/services/io.vertx.core.spi.VerticleFactory'
+    }
+}
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+    afterSuite { desc, result ->
+        if (!desc.parent) { // will match the outermost suite
+            def output = "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)"
+            def startItem = '|  ', endItem = '  |'
+            def repeatLength = startItem.length() + output.length() + endItem.length()
+            println('\n' + ('-' * repeatLength) + '\n' + startItem + output + endItem + '\n' + ('-' * repeatLength))
+        }
+    }
+    finalizedBy jacocoTestReport // report is always generated after tests run
+}
+
+jacoco {
+    toolVersion = "0.8.5"
+    reportsDir = file("$buildDir/customJacocoReportDir")
+}
+
+jacocoTestReport {
+    dependsOn test // tests are required to run before generating the report
+    reports {
+        xml.enabled true
+        csv.enabled false
+        html.destination file("${buildDir}/jacocoHtml")
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                    "com/bigbasket/places/api/PlacesAPI.class",
+                    "com/bigbasket/places/controller/*",
+                    "com/bigbasket/places/scripts/*"
+            ])
+        }))
+    }
+}

@@ -1,0 +1,105 @@
+{{- $root := . }}
+  {{- $values := $root.Values }}
+  {{- $environment := $values.environment}}
+  {{ $registry := (or (eq $environment "prod") (eq $environment "staging")) | ternary  "274334742953.dkr.ecr.ap-south-1.amazonaws.com/bb-engg/" "274334742953.dkr.ecr.us-east-1.amazonaws.com/bb-engg/" }}
+  {{ range $values.cronJobs }}
+  {{ $currentJob := . }}
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  {{- if $currentJob.podLabels }}
+  labels:
+    {{ toYaml $currentJob.podLabels }}{{ include "app.uniqueSuffix" $values }}
+  {{- end }}
+  name: {{ $currentJob.name }}{{ include "app.uniqueSuffix" $values }}
+  namespace: {{ $values.namespace }}
+spec:
+  concurrencyPolicy: {{ default "Forbid" $currentJob.concurrencyPolicy }}
+  jobTemplate:
+    spec:
+      {{- if hasKey $currentJob "backoffLimit" }}
+      backoffLimit: {{ $currentJob.backoffLimit }}
+      {{- end }}
+      template:
+        {{- if hasKey $currentJob "podAnnotations" }}
+        metadata:
+          annotations:
+            {{- include "sandbox.podAnnotations" $currentJob | nindent 12}}
+        {{- end }}
+        spec:
+          {{- if $currentJob.affinity }}
+          {{- include "sandbox.affinity" $currentJob.affinity | trim | nindent 10 }}
+          {{- end }}
+            {{- if $currentJob.imagePullSecret }}
+          imagePullSecrets:
+            - name: {{ $currentJob.imagePullSecret }}
+              {{- end }}
+          tolerations:
+          - effect: NoSchedule
+            key: access
+            operator: Equal
+            value: pod
+          nodeSelector:
+            {{- include "sandbox.nodeLabels" $values.nodeLabels | trim | nindent 12 }}
+          containers:
+            {{- range $currentJob.containers }}
+            - name: {{ .name }}{{ include "app.uniqueSuffix" $values }}
+              {{- if .env }}
+              env:
+              {{- toYaml .env | nindent 14 }}
+              {{- end }}
+              envFrom:
+                {{- if  .configMapName }}
+                - configMapRef:
+                    name: {{ .configMapName }}{{ include "app.uniqueSuffix" $values }}
+                {{- end }}
+                {{- if  .secretName }}
+                - secretRef:
+                    name: {{ .secretName }}{{ include "app.uniqueSuffix" $values }}
+                {{- end }}
+                - secretRef:
+                    name: {{ $values.requiredInfraDependencies.name }}{{ include "app.uniqueSuffix" $values }}
+              image: {{ $registry }}{{ .imageName }}:{{- .imageTag }}
+              imagePullPolicy: {{ default "IfNotPresent" .imagePullPolicy }}
+              {{- if .imagePullSecret }}
+              imagePullSecrets:
+                - name: { { $currentJob.imagePullSecret } }{ { include "app.uniqueSuffix" $values } }
+              {{- end }}
+              {{- if .command }}
+              command:
+              {{- toYaml .command | nindent 14 }}
+              {{- end }}
+              {{- if .args }}
+              args:
+              {{- toYaml .args | nindent 14 }}
+              {{- end }}
+              resources:
+              {{- toYaml .resources | nindent 16 }}
+              {{- if or ($values.configFiles) ($values.secretsFiles) }}
+              volumeMounts:
+              {{- if $values.configFiles }}
+              {{- include "sandbox.containerVolumeMounts" $values.configFiles | trim | nindent 14 }}
+              {{- end }}
+              {{- if $values.secretsFiles }}
+              {{- include "sandbox.containerVolumeMounts" $values.secretsFiles | trim | nindent 14 }}
+              {{- end }}
+          {{- end }}
+          {{- end }}
+          restartPolicy: {{ default "Never" .restartPolicy }}
+          {{ $podConfigMapVolumesData := dict "configFiles" $values.configFiles "type" "configFiles" -}}
+          {{ $podSecretVolumesData := dict "secretsFiles" $values.secretsFiles "type" "secretsFiles" -}}
+          {{- if or ($podConfigMapVolumesData.configFiles) ($podSecretVolumesData.secretsFiles) -}}
+          volumes:
+          {{- if $podConfigMapVolumesData.configFiles }}
+          {{- include "sandbox.podVolumes" $podConfigMapVolumesData | trim | nindent 12 }}
+          {{- end }}
+          {{- if $podSecretVolumesData.secretsFiles }}
+          {{- include "sandbox.podVolumes" $podSecretVolumesData | trim | nindent 12 }}
+          {{- end }}
+  {{- end }}
+  schedule: {{ $currentJob.schedule | quote}}
+  {{ if hasKey $currentJob "startingDeadlineSeconds" -}}
+  startingDeadlineSeconds: {{ $currentJob.startingDeadlineSeconds }}
+  {{- end }}
+---
+  {{ end -}}

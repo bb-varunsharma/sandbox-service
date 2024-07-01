@@ -1,0 +1,31 @@
+<configuration>
+    <variable name="LOG_LEVEL" value="${LOG_LEVEL:-DEBUG}" />
+
+    <!--appender name="console" -->
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+
+        </encoder>
+
+    </appender>
+
+    <logger name="io.netty">
+        <level value="warn" />
+    </logger>
+
+    <logger name="com.bigbasket">
+        <level value="debug" />
+    </logger>
+
+    <logger name="io.grpc.netty">
+        <level value="warn" />
+    </logger>
+
+    <logger name="org.apache.kafka">
+        <level value="off" />
+    </logger>
+
+    <root level="${LOG_LEVEL}">
+        <appender-ref ref="console" />
+    </root>
+</configuration>

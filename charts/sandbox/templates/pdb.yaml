@@ -1,0 +1,31 @@
+{{ $root := . }}
+  {{ $values := $root.Values }}
+  {{ if $values.deployments }}
+  {{ range $values.deployments }}
+  {{ $includePdb := false }}
+  {{ $isNotCanary := true }}
+  {{ $currentDeployment := . }}
+  {{ if hasKey $currentDeployment "canary" }}
+  {{ $isNotCanary = eq $currentDeployment.canary.enabled false }}
+  {{ end }}
+  {{ $isPdbDefined := hasKey $currentDeployment "pdb" }}
+  {{ $includePdb = and $isNotCanary $isPdbDefined }}
+  {{ if $isPdbDefined }}
+  {{ $includePdb = and $includePdb (ne $currentDeployment.pdb.minAvailable "") }}
+  {{ end }}
+  {{ if $includePdb }}
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ printf "%s-%s" $currentDeployment.name "pdb" }}
+  namespace: {{ $values.namespace }}
+spec:
+  minAvailable: {{ $currentDeployment.pdb.minAvailable }}
+  selector:
+    matchLabels:
+    {{- if $currentDeployment.podLabels }}
+    {{- toYaml $currentDeployment.podLabels | nindent 12 }}
+  {{- end -}}
+{{ end }}
+  {{ end }}
+  {{ end }}
